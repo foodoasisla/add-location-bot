@@ -49,8 +49,9 @@ app.get("/", function (request, response) {
 
 // could also use the POST body instead of query string: http://expressjs.com/en/api.html#req.body
 app.post("/add", addLocation);
-app.post("/edit", editLocation);
+//app.post("/edit", editLocation);
 
+/*
 function editLocation (request, response) {
   console.log("got an edit request!");
   const originalLocationUrl = 'https://foodoasis.la' + request.body.url;
@@ -203,12 +204,25 @@ longitude: ${longitude}
   //dreams.push(request.query.dream);
   //response.sendStatus(200);
 }
+*/
 
+function formatTime(timeString) { // Example: 1430 ==> 2:30pm; 0900 ==> 9:00am
+  let hours   = Number(timeString.substring(0, timeString.length - 2));
+  let minutes = timeString.substring(timeString.length - 2);
+  let ampm = 'am';
+  if (hours >= 12 && hours < 24) {
+    ampm = 'pm';
+  }
+  if (hours >= 13) {
+    hours = hours - 12;
+  }
+  return hours + ((minutes != '00') ? ":" + minutes : '') + ampm;
+}
 
 function addLocation (request, response) {
   const title = request.body.title;
   const locationCategory = request.body.category;
-  
+
   // Create a branch
   var branchName = `location-${Math.random().toString(36).substr(2,5)}`;
 
@@ -286,20 +300,92 @@ function addLocation (request, response) {
   
   // And then create the file
   Promise.all([geocode, githubRef]).then(result => {
-
-    //console.dir(result);
-
-    latitude = result[0].latitude;
-    longitude = result[0].longitude;    
     
-    let data = request.body;
+    //console.dir(result); 
+    
+    let data = {
+      title: request.body.title,
+      category: request.body.category,
+      address_1: request.body.address_1,
+      address_2: request.body.address_2,
+      city: request.body.city,
+      state: 'California',
+      zip: request.body.zip,
+      website: request.body.website,
+      phone: request.body.phone,
+      notes: request.body.notes,
+      contributor_name: request.body.contributor_name,
+      latitude: result[0].latitude,
+      longitude: result[0].longitude
+    };
+    
+    /*
+    FORMAT HOURS IN THIS FORMAT:
+
+    daycode1: Wed
+    day1_open: '1400'
+    day1_close: '1900'
+    formatted_daycode1: Wednesday
+    formatted_day1_open: 2pm
+    formatted_day1_close: 7pm
+    */
+
+    const days = [
+      {
+        abbreviation: "Mon",
+        fullName: "Monday"
+      },
+      {
+        abbreviation: "Tue",
+        fullName: "Tuesday"
+      },
+      {
+        abbreviation: "Wed",
+        fullName: "Wednesday"
+      },
+      {
+        abbreviation: "Thu",
+        fullName: "Thursday"
+      },
+      {
+        abbreviation: "Fri",
+        fullName: "Friday"
+      },
+      {
+        abbreviation: "Sat",
+        fullName: "Saturday"
+      },
+      {
+        abbreviation: "Sun",
+        fullName: "Sunday"
+      }
+    ];
+
+    // Actually add the hours data from form into data object 
+    createHoursData( request.body["daily-hours-same-radio"] === "same" );
+
+    function createHoursData (isSame) {
+      
+      days.forEach(function(day, index) {
+        let prefix = isSame ? "Same" : day.fullName;
+
+        // If all of the days have the same hours, or if this day is not closed
+        if (isSame || !request.body[day.fullName + 'Closed']) {
+          data[`daycode${index+1}`] = day.abbreviation;
+          data[`day${index+1}_open`] = request.body[prefix + 'HoursOpen'];
+          data[`day${index+1}_close`] = request.body[prefix + 'HoursClose'];
+
+          data[`formatted_daycode${index+1}`] = day.fullName;
+          data[`formatted_day${index+1}_open`] = formatTime( request.body[prefix + 'HoursOpen'] );
+          data[`formatted_day${index+1}_close`] = formatTime( request.body[prefix + 'HoursClose'] );
+        }
+      });
+    }
 
     // https://www.npmjs.com/package/js-yaml#safedump-object---options-
     let content =
 `---
-${yaml.safeDump(request.body)}
-latitude: ${latitude}
-longitude: ${longitude}
+${yaml.safeDump(data)}
 ---
 `
     content = new Buffer(content).toString('base64');
@@ -342,3 +428,5 @@ longitude: ${longitude}
 var listener = app.listen(process.env.PORT, function () {
   console.log('Your app is listening on port ' + listener.address().port);
 });
+
+
